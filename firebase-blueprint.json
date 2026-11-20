@@ -1,0 +1,445 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private user profile and active logbook preference.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the user."
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200,
+          "description": "Verified email address of the user."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Display name of the user."
+        },
+        "activeLogbookId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Currently selected logbook workspace ID."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["uid", "email", "displayName", "activeLogbookId", "createdAt", "updatedAt"]
+    },
+    "Logbook": {
+      "title": "Logbook",
+      "description": "An F/O Logbook workspace storing unit definitions, operator roster, and authorized team emails.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the logbook owner."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name of the F/O Logbook workspace."
+        },
+        "units": {
+          "type": "array",
+          "description": "Configured operational units (maximum 20 items)."
+        },
+        "reporters": {
+          "type": "array",
+          "description": "Configured operator/reporter names (maximum 50 items)."
+        },
+        "memberEmails": {
+          "type": "array",
+          "description": "Authorized team member emails (maximum 20 items)."
+        },
+        "backedUpMonths": {
+          "type": "array",
+          "description": "List of YYYY-MM months that have been backed up via CSV export (maximum 120 items)."
+        },
+        "inviteCode": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 64,
+          "description": "Optional active invite code allowing teammates to self-join via invite link."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["ownerId", "name", "units", "reporters", "memberEmails", "createdAt", "updatedAt"]
+    },
+    "TeamInvite": {
+      "title": "TeamInvite",
+      "description": "Shareable invite link record linking an unguessable invite code to a Logbook without exposing member emails.",
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unguessable invite code matching document ID."
+        },
+        "logbookId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Target Logbook document ID."
+        },
+        "logbookName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name of the target Logbook."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the Logbook owner who created the invite."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether this invite link can currently be used to join."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["code", "logbookId", "logbookName", "ownerId", "active", "createdAt", "updatedAt"]
+    },
+    "InviteClaim": {
+      "title": "InviteClaim",
+      "description": "Self-join verification claim created by an invited user possessing the invite code.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the joining user."
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200,
+          "description": "Verified email address of the joining user."
+        },
+        "logbookId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Target Logbook ID."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Matching invite code."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["uid", "email", "logbookId", "code", "createdAt"]
+    },
+    "LogEntry": {
+      "title": "LogEntry",
+      "description": "A daily Field Operations (F/O) shift logbook report entry.",
+      "type": "object",
+      "properties": {
+        "logbookId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent logbook workspace ID."
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner UID copied from parent logbook for list query security."
+        },
+        "authorUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the user who submitted this entry."
+        },
+        "memberEmails": {
+          "type": "array",
+          "description": "Authorized member emails mirrored from parent logbook (maximum 20 items)."
+        },
+        "reportDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Report date in YYYY-MM-DD format."
+        },
+        "reportMonth": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^\\d{4}-\\d{2}$",
+          "description": "Report month in YYYY-MM format for monthly CSV export."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Operational unit name (e.g. SA/IA Unit)."
+        },
+        "reporterName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Name of the reporting operator."
+        },
+        "shift": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D"],
+          "description": "Shift identifier."
+        },
+        "period": {
+          "type": "string",
+          "enum": ["Morning shift", "Night shift"],
+          "description": "Work period of the shift."
+        },
+        "details": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Detailed operational work report."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "logbookId",
+        "ownerId",
+        "authorUid",
+        "memberEmails",
+        "reportDate",
+        "reportMonth",
+        "unit",
+        "reporterName",
+        "shift",
+        "period",
+        "details",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SharedWorkspace": {
+      "title": "SharedWorkspace",
+      "description": "Shared open team F/O Logbook workspace accessible without sign-in, containing zero PII.",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Workspace identifier matching document ID (fo-logbook-main)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Display name of the shared F/O Logbook workspace."
+        },
+        "units": {
+          "type": "array",
+          "description": "Configured operational units (maximum 20 items)."
+        },
+        "reporters": {
+          "type": "array",
+          "description": "Configured operator/reporter names (maximum 50 items)."
+        },
+        "backedUpMonths": {
+          "type": "array",
+          "description": "List of YYYY-MM months that have been backed up via CSV export (maximum 120 items)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": ["workspaceId", "name", "units", "reporters", "createdAt", "updatedAt"]
+    },
+    "SharedLogEntry": {
+      "title": "SharedLogEntry",
+      "description": "A daily F/O Logbook work report entry in the shared open team workspace (zero PII).",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Parent shared workspace ID (fo-logbook-main)."
+        },
+        "reportDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "Report date in YYYY-MM-DD format."
+        },
+        "reportMonth": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^\\d{4}-\\d{2}$",
+          "description": "Report month in YYYY-MM format."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Operational unit name."
+        },
+        "reporterName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the reporting operator."
+        },
+        "shift": {
+          "type": "string",
+          "enum": ["A", "B", "C", "D"],
+          "description": "Shift identifier."
+        },
+        "period": {
+          "type": "string",
+          "enum": ["Morning shift", "Night shift"],
+          "description": "Work period of the shift."
+        },
+        "details": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "Detailed operational work report."
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Optional original creation timestamp preserved during legacy entry migration."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "workspaceId",
+        "reportDate",
+        "reportMonth",
+        "unit",
+        "reporterName",
+        "shift",
+        "period",
+        "details",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and active workspace selection."
+    },
+    "/logbooks/{logbookId}": {
+      "schema": { "$ref": "#/entities/Logbook" },
+      "description": "Signed-in personal or legacy team F/O Logbook workspace configuration."
+    },
+    "/logbooks/{logbookId}/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/LogEntry" },
+      "description": "Daily work report entries belonging to a signed-in logbook workspace."
+    },
+    "/invites/{inviteCode}": {
+      "schema": { "$ref": "#/entities/TeamInvite" },
+      "description": "Shareable invite tokens for joining a signed-in team Logbook."
+    },
+    "/invites/{inviteCode}/claims/{userId}": {
+      "schema": { "$ref": "#/entities/InviteClaim" },
+      "description": "Verified self-join proof documents created by invited users."
+    },
+    "/sharedWorkspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/SharedWorkspace" },
+      "description": "Open team F/O Logbook workspace usable without sign-in (strictly scoped to fo-logbook-main, zero PII)."
+    },
+    "/sharedWorkspaces/{workspaceId}/entries/{entryId}": {
+      "schema": { "$ref": "#/entities/SharedLogEntry" },
+      "description": "Daily work report entries in the shared open team workspace."
+    }
+  }
+}

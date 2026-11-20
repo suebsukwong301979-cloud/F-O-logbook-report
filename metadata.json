@@ -1,0 +1,6 @@
+{
+  "name": "F/O Logbook Report",
+  "description": "Daily Field Operations (F/O) Logbook reporting, shift handover summary, and monthly CSV backup workspace.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

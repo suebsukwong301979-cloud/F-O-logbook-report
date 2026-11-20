@@ -1,0 +1,399 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardened Primitives ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidInviteCode(code) {
+      return code is string && code.size() >= 16 && code.size() <= 64 && code.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidDateStr(d) {
+      return d is string && d.size() == 10 && d.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidMonthStr(m) {
+      return m is string && m.size() == 7 && m.matches('^\\d{4}-\\d{2}$');
+    }
+
+    function isValidEmail(e) {
+      return e is string && e.size() >= 3 && e.size() <= 200 && e.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'activeLogbookId', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'activeLogbookId', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && isValidEmail(data.email)
+        && data.email == request.auth.token.email
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && isValidId(data.activeLogbookId)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidLogbook(data) {
+      return data.keys().hasAll(['ownerId', 'name', 'units', 'reporters', 'memberEmails', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerId', 'name', 'units', 'reporters', 'memberEmails', 'backedUpMonths', 'inviteCode', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.units is list && data.units.size() >= 1 && data.units.size() <= 20
+        && data.units[0] is string && data.units[0].size() >= 1 && data.units[0].size() <= 80
+        && data.reporters is list && data.reporters.size() <= 50
+        && (data.reporters.size() == 0 || (data.reporters[0] is string && data.reporters[0].size() >= 1 && data.reporters[0].size() <= 80))
+        && data.memberEmails is list && data.memberEmails.size() >= 1 && data.memberEmails.size() <= 20
+        && isValidEmail(data.memberEmails[0])
+        && (!('backedUpMonths' in data) || (data.backedUpMonths is list && data.backedUpMonths.size() <= 120 && (data.backedUpMonths.size() == 0 || isValidMonthStr(data.backedUpMonths[0]))))
+        && (!('inviteCode' in data) || (data.inviteCode is string && (data.inviteCode.size() == 0 || isValidInviteCode(data.inviteCode))))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInvite(data, inviteCode) {
+      return data.keys().hasAll(['code', 'logbookId', 'logbookName', 'ownerId', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['code', 'logbookId', 'logbookName', 'ownerId', 'active', 'createdAt', 'updatedAt'])
+        && isValidInviteCode(data.code)
+        && data.code == inviteCode
+        && isValidId(data.logbookId)
+        && data.logbookName is string && data.logbookName.size() >= 1 && data.logbookName.size() <= 120
+        && isValidId(data.ownerId)
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInviteClaim(data, inviteCode, userId) {
+      return data.keys().hasAll(['uid', 'email', 'logbookId', 'code', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'logbookId', 'code', 'createdAt'])
+        && isValidId(data.uid)
+        && data.uid == request.auth.uid
+        && data.uid == userId
+        && isValidEmail(data.email)
+        && data.email == request.auth.token.email
+        && isValidId(data.logbookId)
+        && isValidInviteCode(data.code)
+        && data.code == inviteCode
+        && data.createdAt is timestamp;
+    }
+
+    function isLogbookMember(data) {
+      return data.ownerId == request.auth.uid
+        || (request.auth.token.email is string && request.auth.token.email in data.memberEmails);
+    }
+
+    function isValidLogEntry(data, logbookId) {
+      return data.keys().hasAll([
+          'logbookId', 'ownerId', 'authorUid', 'memberEmails',
+          'reportDate', 'reportMonth', 'unit', 'reporterName',
+          'shift', 'period', 'details', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'logbookId', 'ownerId', 'authorUid', 'memberEmails',
+          'reportDate', 'reportMonth', 'unit', 'reporterName',
+          'shift', 'period', 'details', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.logbookId) && data.logbookId == logbookId
+        && isValidId(data.ownerId)
+        && isValidId(data.authorUid)
+        && data.memberEmails is list && data.memberEmails.size() >= 1 && data.memberEmails.size() <= 20
+        && isValidEmail(data.memberEmails[0])
+        && isValidDateStr(data.reportDate)
+        && isValidMonthStr(data.reportMonth)
+        && data.reportDate[0:7] == data.reportMonth
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 80
+        && data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 80
+        && data.shift in ['A', 'B', 'C', 'D']
+        && data.period in ['Morning shift', 'Night shift']
+        && data.details is string && data.details.size() >= 1 && data.details.size() <= 4000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSharedWorkspace(data, workspaceId) {
+      return data.keys().hasAll(['workspaceId', 'name', 'units', 'reporters', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['workspaceId', 'name', 'units', 'reporters', 'backedUpMonths', 'createdAt', 'updatedAt'])
+        && isValidId(data.workspaceId)
+        && data.workspaceId == workspaceId
+        && workspaceId == 'fo-logbook-main'
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.units is list && data.units.size() >= 1 && data.units.size() <= 20
+        && data.units[0] is string && data.units[0].size() >= 1 && data.units[0].size() <= 80
+        && data.reporters is list && data.reporters.size() <= 50
+        && (data.reporters.size() == 0 || (data.reporters[0] is string && data.reporters[0].size() >= 1 && data.reporters[0].size() <= 80))
+        && (!('backedUpMonths' in data) || (data.backedUpMonths is list && data.backedUpMonths.size() <= 120 && (data.backedUpMonths.size() == 0 || isValidMonthStr(data.backedUpMonths[0]))))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSharedEntry(data, workspaceId) {
+      return data.keys().hasAll([
+          'workspaceId', 'reportDate', 'reportMonth', 'unit',
+          'reporterName', 'shift', 'period', 'details', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'workspaceId', 'reportDate', 'reportMonth', 'unit',
+          'reporterName', 'shift', 'period', 'details', 'recordedAt', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.workspaceId)
+        && data.workspaceId == workspaceId
+        && workspaceId == 'fo-logbook-main'
+        && isValidDateStr(data.reportDate)
+        && isValidMonthStr(data.reportMonth)
+        && data.reportDate[0:7] == data.reportMonth
+        && data.unit is string && data.unit.size() >= 1 && data.unit.size() <= 80
+        && data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 80
+        && data.shift in ['A', 'B', 'C', 'D']
+        && data.period in ['Morning shift', 'Night shift']
+        && data.details is string && data.details.size() >= 1 && data.details.size() <= 4000
+        && (!('recordedAt' in data) || data.recordedAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Shared Open Workspace (Zero PII, No Sign-In Required) ---
+    match /sharedWorkspaces/{workspaceId} {
+      allow get: if isValidId(workspaceId) && workspaceId == 'fo-logbook-main';
+      allow list: if false;
+      allow create: if isValidId(workspaceId)
+        && workspaceId == 'fo-logbook-main'
+        && isValidSharedWorkspace(incoming(), workspaceId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(workspaceId)
+        && workspaceId == 'fo-logbook-main'
+        && isValidSharedWorkspace(incoming(), workspaceId)
+        && incoming().workspaceId == existing().workspaceId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'units', 'reporters', 'backedUpMonths', 'updatedAt']);
+      allow delete: if false;
+
+      match /entries/{entryId} {
+        allow get: if isValidId(workspaceId)
+          && workspaceId == 'fo-logbook-main'
+          && isValidId(entryId)
+          && exists(/databases/$(database)/documents/sharedWorkspaces/$(workspaceId));
+
+        allow list: if workspaceId == 'fo-logbook-main'
+          && existing().workspaceId == 'fo-logbook-main';
+
+        allow create: if isValidId(workspaceId)
+          && workspaceId == 'fo-logbook-main'
+          && isValidId(entryId)
+          && isValidSharedEntry(incoming(), workspaceId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/sharedWorkspaces/$(workspaceId));
+
+        allow update: if isValidId(workspaceId)
+          && workspaceId == 'fo-logbook-main'
+          && isValidId(entryId)
+          && isValidSharedEntry(incoming(), workspaceId)
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/sharedWorkspaces/$(workspaceId))
+          && incoming().diff(existing()).affectedKeys().hasOnly([
+            'reportDate', 'reportMonth', 'unit', 'reporterName', 'shift', 'period', 'details', 'updatedAt'
+          ]);
+
+        allow delete: if isValidId(workspaceId)
+          && workspaceId == 'fo-logbook-main'
+          && isValidId(entryId)
+          && exists(/databases/$(database)/documents/sharedWorkspaces/$(workspaceId));
+      }
+    }
+
+    // --- Legacy & Private Signed-In Collection Rules ---
+    match /users/{userId} {
+      allow get: if isVerified() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'activeLogbookId', 'email', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /invites/{inviteCode} {
+      allow get: if isVerified() && isValidInviteCode(inviteCode);
+      allow list: if false;
+      allow create: if isVerified()
+        && isValidInviteCode(inviteCode)
+        && isValidInvite(incoming(), inviteCode)
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/logbooks/$(incoming().logbookId))
+        && get(/databases/$(database)/documents/logbooks/$(incoming().logbookId)).data.ownerId == request.auth.uid;
+      allow update: if isVerified()
+        && isValidInviteCode(inviteCode)
+        && isValidInvite(incoming(), inviteCode)
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().code == existing().code
+        && incoming().logbookId == existing().logbookId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['active', 'logbookName', 'updatedAt']);
+      allow delete: if isVerified()
+        && isValidInviteCode(inviteCode)
+        && existing().ownerId == request.auth.uid;
+
+      match /claims/{userId} {
+        allow get: if isVerified()
+          && isValidInviteCode(inviteCode)
+          && isValidId(userId)
+          && request.auth.uid == userId;
+        allow list: if false;
+        allow create: if isVerified()
+          && isValidInviteCode(inviteCode)
+          && isValidId(userId)
+          && request.auth.uid == userId
+          && isValidInviteClaim(incoming(), inviteCode, userId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/invites/$(inviteCode))
+          && get(/databases/$(database)/documents/invites/$(inviteCode)).data.active == true
+          && incoming().logbookId == get(/databases/$(database)/documents/invites/$(inviteCode)).data.logbookId;
+        allow update: if false;
+        allow delete: if isVerified()
+          && isValidInviteCode(inviteCode)
+          && isValidId(userId)
+          && request.auth.uid == userId;
+      }
+    }
+
+    match /logbooks/{logbookId} {
+      allow get: if isVerified() && isValidId(logbookId) && isLogbookMember(existing());
+      allow list: if isVerified() && isLogbookMember(existing());
+      allow create: if isVerified()
+        && isValidId(logbookId)
+        && isValidLogbook(incoming())
+        && incoming().ownerId == request.auth.uid
+        && request.auth.token.email is string
+        && request.auth.token.email in incoming().memberEmails
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(logbookId)
+        && isValidLogbook(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (existing().ownerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'units', 'reporters', 'memberEmails', 'backedUpMonths', 'inviteCode', 'updatedAt'])
+            && request.auth.token.email is string
+            && request.auth.token.email in incoming().memberEmails)
+          ||
+          (isLogbookMember(existing())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['units', 'reporters', 'backedUpMonths', 'updatedAt']))
+          ||
+          ('inviteCode' in existing()
+            && isValidInviteCode(existing().inviteCode)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberEmails', 'updatedAt'])
+            && request.auth.token.email is string
+            && !(request.auth.token.email in existing().memberEmails)
+            && request.auth.token.email in incoming().memberEmails
+            && incoming().memberEmails.hasAll(existing().memberEmails)
+            && incoming().memberEmails.size() == existing().memberEmails.size() + 1
+            && exists(/databases/$(database)/documents/invites/$(existing().inviteCode))
+            && get(/databases/$(database)/documents/invites/$(existing().inviteCode)).data.active == true
+            && get(/databases/$(database)/documents/invites/$(existing().inviteCode)).data.logbookId == logbookId
+            && exists(/databases/$(database)/documents/invites/$(existing().inviteCode)/claims/$(request.auth.uid))
+            && get(/databases/$(database)/documents/invites/$(existing().inviteCode)/claims/$(request.auth.uid)).data.email == request.auth.token.email
+            && get(/databases/$(database)/documents/invites/$(existing().inviteCode)/claims/$(request.auth.uid)).data.logbookId == logbookId)
+        );
+      allow delete: if isVerified() && isValidId(logbookId) && existing().ownerId == request.auth.uid;
+
+      match /entries/{entryId} {
+        allow get: if isVerified()
+          && isValidId(logbookId)
+          && isValidId(entryId)
+          && exists(/databases/$(database)/documents/logbooks/$(logbookId))
+          && isLogbookMember(get(/databases/$(database)/documents/logbooks/$(logbookId)).data);
+
+        allow list: if isVerified()
+          && isValidId(logbookId)
+          && (existing().ownerId == request.auth.uid
+            || (request.auth.token.email is string && request.auth.token.email in existing().memberEmails));
+
+        allow create: if isVerified()
+          && isValidId(logbookId)
+          && isValidId(entryId)
+          && isValidLogEntry(incoming(), logbookId)
+          && incoming().authorUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/logbooks/$(logbookId))
+          && isLogbookMember(get(/databases/$(database)/documents/logbooks/$(logbookId)).data)
+          && incoming().ownerId == get(/databases/$(database)/documents/logbooks/$(logbookId)).data.ownerId
+          && incoming().memberEmails == get(/databases/$(database)/documents/logbooks/$(logbookId)).data.memberEmails;
+
+        allow update: if isVerified()
+          && isValidId(logbookId)
+          && isValidId(entryId)
+          && isValidLogEntry(incoming(), logbookId)
+          && incoming().logbookId == existing().logbookId
+          && incoming().ownerId == existing().ownerId
+          && incoming().authorUid == existing().authorUid
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && exists(/databases/$(database)/documents/logbooks/$(logbookId))
+          && isLogbookMember(get(/databases/$(database)/documents/logbooks/$(logbookId)).data)
+          && (
+            ((existing().authorUid == request.auth.uid || get(/databases/$(database)/documents/logbooks/$(logbookId)).data.ownerId == request.auth.uid)
+              && incoming().diff(existing()).affectedKeys().hasOnly([
+                'reportDate', 'reportMonth', 'unit', 'reporterName', 'shift', 'period', 'details', 'updatedAt'
+              ]))
+            ||
+            (incoming().diff(existing()).affectedKeys().hasOnly(['memberEmails', 'updatedAt'])
+              && incoming().memberEmails == get(/databases/$(database)/documents/logbooks/$(logbookId)).data.memberEmails)
+          );
+
+        allow delete: if isVerified()
+          && isValidId(logbookId)
+          && isValidId(entryId)
+          && exists(/databases/$(database)/documents/logbooks/$(logbookId))
+          && (existing().authorUid == request.auth.uid
+            || get(/databases/$(database)/documents/logbooks/$(logbookId)).data.ownerId == request.auth.uid);
+      }
+    }
+  }
+}
